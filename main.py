@@ -21,6 +21,9 @@ parser.add_argument("content_filename")
 parser.add_argument("style_filename")
 parser.add_argument("-a", "--alpha", type=float, default=1.0, dest="alpha")
 parser.add_argument("-b", "--beta", type=float, default=10000.0, dest="beta")
+parser.add_argument(
+    "-c", "--checkpoint-every", type=int, default=20, dest="checkpoint_every"
+)
 parser.add_argument("-i", "--iterations", type=int, default=600, dest="iterations")
 
 args = parser.parse_args()
@@ -50,6 +53,16 @@ gIm0 = np.random.randint(256, size=(targetWidth, targetHeight, 3)).astype("float
 gIm0 = preprocess_input(np.expand_dims(gIm0, axis=0))
 
 gImPlaceholder = K.placeholder(shape=(1, targetWidth, targetHeight, 3))
+
+cLayerNames = ["block4_conv2"]
+
+sLayerNames = [
+    "block1_conv1",
+    "block2_conv1",
+    "block3_conv1",
+    "block4_conv1",
+    # 'block5_conv1'
+]
 
 # #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
 # # Define loss and helper functions
@@ -92,7 +105,7 @@ def get_style_loss(ws, Gs, As):
 
 
 def get_total_loss(gImPlaceholder, alpha=args.alpha, beta=args.beta):
-    F = get_feature_reps(gImPlaceholder, layer_names=[cLayerName], model=gModel)[0]
+    F = get_feature_reps(gImPlaceholder, layer_names=cLayerNames, model=gModel)[0]
     Gs = get_feature_reps(gImPlaceholder, layer_names=sLayerNames, model=gModel)
     contentLoss = get_content_loss(F, P)
     styleLoss = get_style_loss(ws, Gs, As)
@@ -155,8 +168,9 @@ iteration_counter = 0
 
 def checkpoint_callback(xk):
     global iteration_counter
+    global args
     iteration_counter += 1
-    if iteration_counter % 20 == 0:
+    if iteration_counter % args.checkpoint_every == 0:
         save_original_size(
             postprocess_array(xk), filename=f"test_{iteration_counter}.jpg"
         )
@@ -166,16 +180,8 @@ tf_session = K.get_session()
 contentModel = VGG16(include_top=False, weights="imagenet", input_tensor=cImArr)
 styleModel = VGG16(include_top=False, weights="imagenet", input_tensor=sImArr)
 gModel = VGG16(include_top=False, weights="imagenet", input_tensor=gImPlaceholder)
-cLayerName = "block4_conv2"
-sLayerNames = [
-    "block1_conv1",
-    "block2_conv1",
-    "block3_conv1",
-    "block4_conv1",
-    # 'block5_conv1'
-]
 
-P = get_feature_reps(x=cImArr, layer_names=[cLayerName], model=contentModel)[0]
+P = get_feature_reps(x=cImArr, layer_names=cLayerNames, model=contentModel)[0]
 As = get_feature_reps(x=sImArr, layer_names=sLayerNames, model=styleModel)
 ws = np.ones(len(sLayerNames)) / float(len(sLayerNames))
 
